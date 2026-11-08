@@ -1,16 +1,18 @@
 --[[
     SystemUI Library - Desktop OS Framework (Preserved G2L 100%)
+    - MỚI: Bật/Tắt Auto-Hide Taskbar động (Di chuột xuống đáy tự trượt lên, 3s sau tự thu xuống).
+    - MỚI: Tự động tính toán và mở rộng Container_MAINDESTOP thông minh theo TopBar & Taskbar:
+      * Cả Top ẩn & Taskbar Auto-Hide -> Full màn hình 100%
+      * Top ẩn & Taskbar cố định -> Dịch lên 0 và bù thêm Size Y
+      * Top hiện & Taskbar Auto-Hide -> Mở rộng kịch đáy màn hình
     - Tự động nhận diện Studio (PlayerGui) và Executor (CoreGui / gethui) + Max DisplayOrder.
-    - Hỗ trợ bật/tắt IgnoreGuiInset động (chuột tự động cân chỉnh không bị lệch).
-    - Tự động co dãn ContextMenu vừa khít nội dung.
-    - Smart Boundary Engine: Lật Trái/Phải & Dịch Lên/Xuống tránh góc màn hình.
+    - Hỗ trợ bật/tắt IgnoreGuiInset động.
+    - ContextMenu tự co dãn vừa khít, lật Trái/Phải & Trên/Dưới thông minh.
     - Window ImageButton chống click xuyên.
-    - Tự ẩn thanh TopBar & tự mở rộng Desktop khi không có Menu.
-    - Taskbar chuẩn Windows 2-click (Enable -> Thu nhỏ).
-    - Hỗ trợ: Snap Window, Double-Click TopBar, Line Preview, Modal Flash Alert.
+    - Snap Window, Double-Click TopBar, Line Preview, Modal Flash Alert.
 ]]
 
-local TweenService = game:GetService("TweenService")
+	local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
 local TextService = game:GetService("TextService")
@@ -25,6 +27,7 @@ local FADE_TIME = 0.14
 local FADE_TWEEN = TweenInfo.new(FADE_TIME, Enum.EasingStyle.Linear)
 local WIN10_ANIM_INFO = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local SNAP_TWEEN_INFO = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local TASKBAR_SLIDE_INFO = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 -- Bảng màu các nút
 local COLOR_CLOSE_ACTIVE = Color3.fromRGB(255, 79, 79)
@@ -42,7 +45,12 @@ SystemOS.ZCounter = 100
 SystemOS.ActiveWindow = nil
 SystemOS.ModalWindow = nil
 
--- Tự động nhận diện môi trường: Studio -> PlayerGui, Executor -> CoreGui / gethui
+-- Trạng thái Auto-Hide Taskbar
+SystemOS.AutoHideTaskbar = false
+local taskbarShowing = true
+local mouseLeaveTaskbarTime = 0
+local autoHideTaskbarTween = nil
+
 local function GetAutoTargetParent()
 	if RunService:IsStudio() then
 		return LocalPlayer:WaitForChild("PlayerGui")
@@ -72,7 +80,6 @@ local function GetAutoTargetParent()
 	return LocalPlayer:WaitForChild("PlayerGui")
 end
 
--- Tự cân chỉnh tọa độ chuột chính xác theo trạng thái IgnoreGuiInset
 local function GetExactMousePosition()
 	local mouseLoc = UserInputService:GetMouseLocation()
 	if SystemOS.ScreenGui and SystemOS.ScreenGui.IgnoreGuiInset then
@@ -84,6 +91,48 @@ local function GetExactMousePosition()
 end
 
 --------------------------------------------------------------------------------
+-- CẬP NHẬT MỞ RỘNG DESKTOP THÔNG MINH (4 TRƯỜNG HỢP)
+--------------------------------------------------------------------------------
+local function UpdateDesktopLayout()
+	if not SystemOS.Desktop then return end
+
+	local hasTopBar = (SystemOS.Top and SystemOS.Top.Visible == true)
+	local isAutoHide = (SystemOS.AutoHideTaskbar == true)
+
+	local topOffset = hasTopBar and 20 or 0
+	local bottomOffset = isAutoHide and 0 or 40
+
+	local targetPos = UDim2.new(0, 0, 0, topOffset)
+	local targetSize = UDim2.new(1, 0, 1, -(topOffset + bottomOffset))
+
+	local tween = TweenService:Create(SystemOS.Desktop, SNAP_TWEEN_INFO, {
+		Position = targetPos,
+		Size = targetSize
+	})
+	tween:Play()
+end
+
+local function ShowTaskbarAnim()
+	if taskbarShowing or not SystemOS.Taskbar then return end
+	taskbarShowing = true
+	if autoHideTaskbarTween then autoHideTaskbarTween:Cancel() end
+	autoHideTaskbarTween = TweenService:Create(SystemOS.Taskbar, TASKBAR_SLIDE_INFO, {
+		Position = UDim2.new(0, 0, 1, 0)
+	})
+	autoHideTaskbarTween:Play()
+end
+
+local function HideTaskbarAnim()
+	if not taskbarShowing or not SystemOS.Taskbar or not SystemOS.AutoHideTaskbar then return end
+	taskbarShowing = false
+	if autoHideTaskbarTween then autoHideTaskbarTween:Cancel() end
+	autoHideTaskbarTween = TweenService:Create(SystemOS.Taskbar, TASKBAR_SLIDE_INFO, {
+		Position = UDim2.new(0, 0, 1, 40) -- Trượt ẩn xuống đáy màn hình
+	})
+	autoHideTaskbarTween:Play()
+end
+
+--------------------------------------------------------------------------------
 -- 1. BẢN VẼ G2L GỐC
 --------------------------------------------------------------------------------
 local function BuildOriginalStructure()
@@ -92,7 +141,7 @@ local function BuildOriginalStructure()
 	G2L["1"] = Instance.new("ScreenGui")
 	G2L["1"]["Name"] = [[SystemUI]]
 	G2L["1"]["ZIndexBehavior"] = Enum.ZIndexBehavior.Sibling
-	G2L["1"]["DisplayOrder"] = 2147483647 -- Giá trị tối đa để đè lên mọi CoreUI của Roblox
+	G2L["1"]["DisplayOrder"] = 2147483647
 
 	G2L["2"] = Instance.new("Frame", G2L["1"])
 	G2L["2"]["BorderSizePixel"] = 0
@@ -206,7 +255,7 @@ local function BuildOriginalStructure()
 	G2L["f"]["Name"] = [[Container_MAINDESTOP]]
 	G2L["f"]["BackgroundTransparency"] = 1
 
-	-- Khung xem trước Snap Preview
+	-- Snap Preview Frame
 	local SnapPreview = Instance.new("Frame", G2L["f"])
 	SnapPreview.Name = "SnapPreview"
 	SnapPreview.BorderSizePixel = 0
@@ -948,13 +997,7 @@ local function CheckTopBarVisibility()
 	local hasItems = (sysCount > 0 or custCount > 0)
 
 	SystemOS.Top.Visible = hasItems
-	if hasItems then
-		SystemOS.Desktop.Position = UDim2.new(0, 0, 0, 20)
-		SystemOS.Desktop.Size = UDim2.new(1, 0, 1, -60)
-	else
-		SystemOS.Desktop.Position = UDim2.new(0, 0, 0, 0)
-		SystemOS.Desktop.Size = UDim2.new(1, 0, 1, -40)
-	end
+	UpdateDesktopLayout()
 end
 
 local function EnsureInitialized(callerSelf, config)
@@ -984,6 +1027,7 @@ local function EnsureInitialized(callerSelf, config)
 	SystemOS.NonUser = G2L["a1"]
 	SystemOS.UIScale = G2L["b0"]
 	SystemOS.SnapPreview = SnapPreview
+	SystemOS.AutoHideTaskbar = (config.AutoHideTaskbar == true)
 
 	SystemOS.Templates = {
 		SystemButton = G2L["6"]:Clone(),
@@ -1071,11 +1115,46 @@ local function EnsureInitialized(callerSelf, config)
 		end
 	end)
 
-	-- ĐƯA VÀO ĐÚNG MÔI TRƯỜNG: STUDIO -> PLAYERGUI, EXECUTOR -> COREGUI / GETHUI
+	----------------------------------------------------------------------------
+	-- VÒNG LẶP KIỂM TRA CON TRỎ ĐỂ TỰ ĐỘNG ẨN/HIỆN TASKBAR & ĐẾM 3 GIÂY
+	----------------------------------------------------------------------------
+	RunService.RenderStepped:Connect(function()
+		if not SystemOS.IsInitialized or not SystemOS.AutoHideTaskbar then return end
+
+		local camera = workspace.CurrentCamera
+		local viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
+		local mouseLoc = UserInputService:GetMouseLocation()
+
+		-- Vùng đáy màn hình (cách mép dưới 12px) hoặc vùng trỏ chuột trúng Taskbar
+		local inBottomZone = (mouseLoc.Y >= (viewport.Y - 14))
+		local tbPos = SystemOS.Taskbar.AbsolutePosition
+		local tbSize = SystemOS.Taskbar.AbsoluteSize
+		local inTaskbar = (mouseLoc.X >= tbPos.X and mouseLoc.X <= (tbPos.X + tbSize.X)
+			and mouseLoc.Y >= tbPos.Y and mouseLoc.Y <= (tbPos.Y + tbSize.Y))
+
+		-- Nếu đang có ContextMenu mở từ taskbar thì không tự ẩn
+		local hasActiveMenu = (#SystemOS.ActiveContextMenus > 0)
+
+		if inBottomZone or inTaskbar or hasActiveMenu then
+			ShowTaskbarAnim()
+			mouseLeaveTaskbarTime = tick()
+		else
+			-- Đã rời chuột khỏi Taskbar, kiểm tra đủ 3 giây chưa
+			if taskbarShowing and (tick() - mouseLeaveTaskbarTime >= 3) then
+				HideTaskbarAnim()
+			end
+		end
+	end)
+
 	local targetParent = GetAutoTargetParent()
 	SystemOS.ScreenGui.Parent = targetParent
 	SystemOS.IsInitialized = true
+
 	CheckTopBarVisibility()
+	if SystemOS.AutoHideTaskbar then
+		HideTaskbarAnim()
+	end
+	UpdateDesktopLayout()
 
 	if callerSelf and type(callerSelf) == "table" and callerSelf ~= SystemOS then
 		for k, v in pairs(SystemOS) do
@@ -1100,11 +1179,23 @@ function SystemOS.Init(callerSelfOrConfig, optionalConfig)
 end
 
 --------------------------------------------------------------------------------
--- 3. HÀM BẬT / TẮT IGNOREGUIINSET ĐỘNG
+-- 3. CÁC HÀM BẬT/TẮT ĐỘNG
 --------------------------------------------------------------------------------
 function SystemOS:SetIgnoreGuiInset(enabled)
 	EnsureInitialized(self)
 	SystemOS.ScreenGui.IgnoreGuiInset = (enabled == true)
+end
+
+function SystemOS:SetAutoHideTaskbar(enabled)
+	EnsureInitialized(self)
+	SystemOS.AutoHideTaskbar = (enabled == true)
+	if SystemOS.AutoHideTaskbar then
+		mouseLeaveTaskbarTime = tick() - 1 -- Để chuẩn bị ẩn nếu không hover
+		UpdateDesktopLayout()
+	else
+		ShowTaskbarAnim()
+		UpdateDesktopLayout()
+	end
 end
 
 --------------------------------------------------------------------------------
@@ -1175,7 +1266,7 @@ function SystemOS:UnfocusAllWindows()
 end
 
 --------------------------------------------------------------------------------
--- 5. SMART CONTEXTMENU (THUẬT TOÁN ĐỊNH VỊ THÔNG MINH TRÁNH MỌI GÓC MÀN HÌNH)
+-- 5. SMART CONTEXTMENU
 --------------------------------------------------------------------------------
 function SystemOS:CloseAllContextMenus()
 	EnsureInitialized(self)
@@ -1372,9 +1463,6 @@ function SystemOS:CreateContextMenu(items, xPos, yPos, parentLayer, subOptions)
 
 	totalHeight = totalHeight + 4
 
-	----------------------------------------------------------------------------
-	-- THUẬT TOÁN ĐỊNH VỊ THÔNG MINH TRÁNH MỌI GÓC MÀN HÌNH (SMART BOUNDARY)
-	----------------------------------------------------------------------------
 	local targetX = xPos
 	local targetY = yPos
 	local finalHeight = totalHeight
@@ -1430,7 +1518,7 @@ function SystemOS:CreateContextMenu(items, xPos, yPos, parentLayer, subOptions)
 end
 
 --------------------------------------------------------------------------------
--- 6. GẮN CONTEXTMENU (CLICK XOAY CAMERA KHÔNG BỊ HIỆN + GIỮ LÌ CHO ĐIỆN THOẠI)
+-- 6. GẮN CONTEXTMENU
 --------------------------------------------------------------------------------
 local function SetupContextMenuTrigger(guiObject, getItemsCallback)
 	local rmbStartPos = nil
