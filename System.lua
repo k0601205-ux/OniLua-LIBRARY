@@ -65,16 +65,19 @@ local function GetAutoTargetParent()
     return LocalPlayer:WaitForChild("PlayerGui")
 end
 
--- LẤY TOẠ ĐỘ CHUỘT CHUẨN XÁC: QUY ĐỔI TRỰC TIẾP VỀ HỆ TRỤC CỦA NonUser (CHỐNG LỆCH XUỐNG DƯỚI)
+-- HÀM LẤY TOẠ ĐỘ CHUỘT CHUẨN XÁC: FIX LỆCH XUỐNG CHO CHUỘT PHẢI
 local function GetExactMousePosition()
-    local mouseLoc = UserInputService:GetMouseLocation()
-    if SystemOS.NonUser then
-        return mouseLoc - SystemOS.NonUser.AbsolutePosition
-    end
     if SystemOS.ScreenGui and SystemOS.ScreenGui.IgnoreGuiInset then
-        return mouseLoc
+        return UserInputService:GetMouseLocation()
     end
-    return mouseLoc - GuiService:GetGuiInset()
+    -- Khi IgnoreGuiInset = false: Dùng Mouse.X và Mouse.Y (Toạ độ GUI gốc của Roblox chuẩn 100%)
+    if LocalPlayer and LocalPlayer:GetMouse() then
+        local m = LocalPlayer:GetMouse()
+        return Vector2.new(m.X, m.Y)
+    end
+    local mouseLoc = UserInputService:GetMouseLocation()
+    local inset = GuiService:GetGuiInset()
+    return Vector2.new(mouseLoc.X - inset.X, mouseLoc.Y - inset.Y)
 end
 
 local function UpdateDesktopLayout()
@@ -228,6 +231,7 @@ local function BuildOriginalStructure()
     G2L["e"]["SortOrder"] = Enum.SortOrder.LayoutOrder
     G2L["e"]["FillDirection"] = Enum.FillDirection.Horizontal
 
+    -- Container Desktop
     G2L["f"] = Instance.new("Frame", G2L["1"])
     G2L["f"]["BorderSizePixel"] = 0
     G2L["f"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255)
@@ -238,6 +242,7 @@ local function BuildOriginalStructure()
     G2L["f"]["Name"] = [[Container_MAINDESTOP]]
     G2L["f"]["BackgroundTransparency"] = 1
 
+    -- Snap Preview Frame
     local SnapPreview = Instance.new("Frame", G2L["f"])
     SnapPreview.Name = "SnapPreview"
     SnapPreview.BorderSizePixel = 0
@@ -253,6 +258,7 @@ local function BuildOriginalStructure()
     spStroke.Color = Color3.fromRGB(0, 150, 255)
     spStroke.Thickness = 1.5
 
+    -- Window ImageButton
     G2L["10"] = Instance.new("ImageButton", G2L["f"])
     G2L["10"]["BorderSizePixel"] = 0
     G2L["10"]["AutoButtonColor"] = false
@@ -1239,7 +1245,7 @@ function SystemOS:UnfocusAllWindows()
 end
 
 --------------------------------------------------------------------------------
--- 4. SMART CONTEXTMENU (CHUẨN TOẠ ĐỘ, KHÔNG BỊ NHẢY VỌT LÊN TRÊN VÀ KHÔNG LỆCH XUỐNG)
+-- 4. SMART CONTEXTMENU (FIX LỆCH CHUỘT PHẢI & THẲNG HÀNG NÚT SUBMENU)
 --------------------------------------------------------------------------------
 function SystemOS:CloseAllContextMenus()
     EnsureInitialized(self)
@@ -1254,7 +1260,7 @@ end
 function SystemOS:CreateContextMenu(items, xPos, yPos, parentLayer, subOptions)
     EnsureInitialized(self)
     parentLayer = parentLayer or SystemOS.NonUser
-    local screenSize = SystemOS.NonUser and SystemOS.NonUser.AbsoluteSize or Vector2.new(1920, 1080)
+    local screenSize = SystemOS.ScreenGui and SystemOS.ScreenGui.AbsoluteSize or Vector2.new(1920, 1080)
 
     local MenuFrame = SystemOS.Templates.ContextMenu:Clone()
     MenuFrame.Visible = true
@@ -1373,16 +1379,16 @@ function SystemOS:CreateContextMenu(items, xPos, yPos, parentLayer, subOptions)
                 end
 
                 if item.Items and #item.Items > 0 then
-                    local nonUserOrigin = SystemOS.NonUser.AbsolutePosition
-                    local itemGuiY = rowInst.AbsolutePosition.Y - nonUserOrigin.Y
-                    local parentGuiX = MenuFrame.AbsolutePosition.X - nonUserOrigin.X
-                    local parentWidth = MenuFrame.AbsoluteSize.X
-                    
-                    activeSubMenu = SystemOS:CreateContextMenu(item.Items, parentGuiX + parentWidth, itemGuiY, parentLayer, {
+                    -- ĐỒNG BỘ TOẠ ĐỘ SUBMENU CHUẨN XÁC: LẤY ĐỘ LỆCH TRỰC TIẾP TỪ NÚT BẤM
+                    local rowOffset = rowInst.AbsolutePosition - MenuFrame.AbsolutePosition
+                    local subY = MenuFrame.Position.Y.Offset + rowOffset.Y
+                    local subX = MenuFrame.Position.X.Offset + MenuFrame.AbsoluteSize.X
+
+                    activeSubMenu = SystemOS:CreateContextMenu(item.Items, subX, subY, parentLayer, {
                         IsSubmenu = true,
-                        ParentX = parentGuiX,
-                        ParentWidth = parentWidth,
-                        ItemY = itemGuiY,
+                        ParentX = MenuFrame.Position.X.Offset,
+                        ParentWidth = MenuFrame.AbsoluteSize.X,
+                        ItemY = subY,
                         ItemHeight = rowInst.AbsoluteSize.Y
                     })
                 end
@@ -1437,7 +1443,7 @@ function SystemOS:CreateContextMenu(items, xPos, yPos, parentLayer, subOptions)
     totalHeight = totalHeight + 4
 
     ----------------------------------------------------------------------------
-    -- THUẬT TOÁN ĐỊNH VỊ CHUẨN XÁC: THẲNG HÀNG NÚT & CHỈ DỊCH LÊN KHI CHẠM ĐÁY
+    -- THUẬT TOÁN ĐỊNH VỊ: KHÔNG LỆCH CON TRỎ CHUỘT & SUBMENU THẲNG HÀNG
     ----------------------------------------------------------------------------
     local targetX = xPos
     local targetY = yPos
@@ -1445,6 +1451,7 @@ function SystemOS:CreateContextMenu(items, xPos, yPos, parentLayer, subOptions)
     local needScroll = false
 
     if subOptions and subOptions.IsSubmenu then
+        -- 1. Lật Trái / Phải
         local rightSideX = subOptions.ParentX + subOptions.ParentWidth
         if (rightSideX + finalWidth) <= (screenSize.X - 5) then
             targetX = rightSideX
@@ -1452,17 +1459,21 @@ function SystemOS:CreateContextMenu(items, xPos, yPos, parentLayer, subOptions)
             targetX = subOptions.ParentX - finalWidth
         end
 
+        -- 2. Thẳng hàng ngang tuyệt đối với nút được trỏ vào
         targetY = subOptions.ItemY
 
         -- CHỈ DỊCH LÊN KHI THỰC SỰ CHẠM ĐÁY MÀN HÌNH
         if (targetY + finalHeight) > (screenSize.Y - 10) then
             targetY = screenSize.Y - finalHeight - 10
         end
+        if targetY < 5 then targetY = 5 end
     else
+        -- Menu gốc: Lật trái nếu sát mép phải
         if (targetX + finalWidth) > (screenSize.X - 5) then
             targetX = targetX - finalWidth
         end
 
+        -- Lật lên nếu sát đáy
         if (targetY + finalHeight) > (screenSize.Y - 10) then
             if (yPos - finalHeight) >= 5 then
                 targetY = yPos - finalHeight
@@ -1472,6 +1483,7 @@ function SystemOS:CreateContextMenu(items, xPos, yPos, parentLayer, subOptions)
         end
     end
 
+    -- Khóa an toàn trong vùng nhìn
     targetX = math.clamp(targetX, 5, math.max(5, screenSize.X - finalWidth - 5))
     targetY = math.clamp(targetY, 5, math.max(5, screenSize.Y - finalHeight - 10))
 
@@ -1493,7 +1505,7 @@ function SystemOS:CreateContextMenu(items, xPos, yPos, parentLayer, subOptions)
 end
 
 --------------------------------------------------------------------------------
--- 5. GẮN CONTEXTMENU
+-- 5. GẮN CONTEXTMENU (CHUỘT PHẢI CHUẨN ĐẦU MŨI CON TRỎ CHUỘT)
 --------------------------------------------------------------------------------
 local function SetupContextMenuTrigger(guiObject, getItemsCallback)
     local rmbStartPos = nil
@@ -1515,6 +1527,7 @@ local function SetupContextMenuTrigger(guiObject, getItemsCallback)
             local dist = (currentPos - rmbStartPos).Magnitude
             local elapsed = tick() - rmbStartTime
 
+            -- Phân biệt Click vs Xoay camera: Click nhẹ là mở ngay
             if dist < 6 and elapsed < 0.35 then
                 local items = getItemsCallback(guiObject)
                 if items and #items > 0 then
@@ -1527,6 +1540,7 @@ local function SetupContextMenuTrigger(guiObject, getItemsCallback)
         end
     end)
 
+    -- Giữ lì 0.5s trên điện thoại
     guiObject.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Touch then
             local touchStartPos = input.Position
@@ -1548,8 +1562,10 @@ local function SetupContextMenuTrigger(guiObject, getItemsCallback)
                         SystemOS.PreventMenuClose = true
                         SystemOS:CloseAllContextMenus()
                         local touchVec = Vector2.new(touchStartPos.X, touchStartPos.Y)
-                        local exactPos = touchVec - SystemOS.NonUser.AbsolutePosition
-                        SystemOS:CreateContextMenu(items, exactPos.X, exactPos.Y, SystemOS.NonUser)
+                        if not SystemOS.ScreenGui.IgnoreGuiInset then
+                            touchVec = touchVec - GuiService:GetGuiInset()
+                        end
+                        SystemOS:CreateContextMenu(items, touchVec.X, touchVec.Y, SystemOS.NonUser)
                     end
                 end
             end)
@@ -1597,7 +1613,10 @@ function SystemOS:AddSystemMenu(logoText, menuItems)
     btn.MouseButton1Click:Connect(function()
         SystemOS.PreventMenuClose = true
         SystemOS:CloseAllContextMenus()
-        local pos = btn.AbsolutePosition - SystemOS.NonUser.AbsolutePosition
+        local pos = btn.AbsolutePosition
+        if not SystemOS.ScreenGui.IgnoreGuiInset then
+            pos = pos - GuiService:GetGuiInset()
+        end
         SystemOS:CreateContextMenu(menuItems, pos.X, pos.Y + btn.AbsoluteSize.Y + 2, SystemOS.NonUser)
     end)
     return btn
@@ -1615,7 +1634,10 @@ function SystemOS:AddTopMenu(name, menuItems)
     btn.MouseButton1Click:Connect(function()
         SystemOS.PreventMenuClose = true
         SystemOS:CloseAllContextMenus()
-        local pos = btn.AbsolutePosition - SystemOS.NonUser.AbsolutePosition
+        local pos = btn.AbsolutePosition
+        if not SystemOS.ScreenGui.IgnoreGuiInset then
+            pos = pos - GuiService:GetGuiInset()
+        end
         SystemOS:CreateContextMenu(menuItems, pos.X, pos.Y + btn.AbsoluteSize.Y + 2, SystemOS.NonUser)
     end)
     return btn
@@ -1891,11 +1913,11 @@ function SystemOS:CreateWindow(config)
 
             local mouseLoc = GetExactMousePosition()
             local dSize = SystemOS.Desktop.AbsoluteSize
-            local dPos = SystemOS.Desktop.AbsolutePosition - SystemOS.NonUser.AbsolutePosition
+            local dPos = SystemOS.Desktop.Position
 
-            local isTopEdge = (mouseLoc.Y <= dPos.Y + 6)
-            local isLeftEdge = (mouseLoc.X <= dPos.X + 6)
-            local isRightEdge = (mouseLoc.X >= (dPos.X + dSize.X - 6))
+            local isTopEdge = (mouseLoc.Y <= dPos.Y.Offset + 6)
+            local isLeftEdge = (mouseLoc.X <= 6)
+            local isRightEdge = (mouseLoc.X >= (dSize.X - 6))
 
             if isTopEdge then
                 activeSnapTarget = "Full"
@@ -2142,7 +2164,7 @@ function SystemOS:DrawOnNonUser(guiType, properties)
 end
 
 --------------------------------------------------------------------------------
--- 9. WORLD RAYCAST CONTEXT MENU (CAMERA - SỬA TRIỆT ĐỂ BẮN RAYCAST TRÚNG CHUẨN XÁC)
+-- 9. WORLD RAYCAST CONTEXT MENU (CAMERA - BẮN TIA CHUẨN XÁC 100%)
 --------------------------------------------------------------------------------
 function SystemOS:BindWorldContextMenu(builderCallback)
     EnsureInitialized(self)
@@ -2151,12 +2173,13 @@ function SystemOS:BindWorldContextMenu(builderCallback)
     local rmbStartTime = 0
     local isRmbDown = false
 
-    local function TryWorldRaycast(screenX, screenY)
+    local function TryWorldRaycast()
         local camera = workspace.CurrentCamera
         if not camera then return end
 
-        -- SỬ DỤNG VIEWPORTPOINTTORAY ĐẢM BẢO CHUẨN XÁC VỚI GETMOUSELOCATION
-        local ray = camera:ViewportPointToRay(screenX, screenY)
+        -- ViewportPointToRay dùng toạ độ Viewport gốc không bị lệch
+        local mouseLoc = UserInputService:GetMouseLocation()
+        local ray = camera:ViewportPointToRay(mouseLoc.X, mouseLoc.Y)
         if not ray then return end
 
         local params = RaycastParams.new()
@@ -2194,7 +2217,7 @@ function SystemOS:BindWorldContextMenu(builderCallback)
             local elapsed = tick() - rmbStartTime
 
             if dist < 6 and elapsed < 0.35 then
-                TryWorldRaycast(curPos.X, curPos.Y)
+                TryWorldRaycast()
             end
         end
     end)
@@ -2216,7 +2239,30 @@ function SystemOS:BindWorldContextMenu(builderCallback)
             task.delay(0.5, function()
                 if not cancelled and input.UserInputState ~= Enum.UserInputState.End and input.UserInputState ~= Enum.UserInputState.Cancel then
                     if moveConn then moveConn:Disconnect() end
-                    TryWorldRaycast(startPos.X, startPos.Y)
+                    local camera = workspace.CurrentCamera
+                    if camera then
+                        local ray = camera:ViewportPointToRay(startPos.X, startPos.Y)
+                        if ray then
+                            local params = RaycastParams.new()
+                            params.FilterType = Enum.RaycastFilterType.Exclude
+                            if LocalPlayer.Character then
+                                params.FilterDescendantsInstances = { LocalPlayer.Character }
+                            end
+
+                            local result = workspace:Raycast(ray.Origin, ray.Direction * 1500, params)
+                            if result and result.Instance then
+                                local items = builderCallback(result.Instance, result.Position)
+                                if items and #items > 0 then
+                                    SystemOS:CloseAllContextMenus()
+                                    local touchVec = Vector2.new(startPos.X, startPos.Y)
+                                    if not SystemOS.ScreenGui.IgnoreGuiInset then
+                                        touchVec = touchVec - GuiService:GetGuiInset()
+                                    end
+                                    SystemOS:CreateContextMenu(items, touchVec.X, touchVec.Y, SystemOS.NonUser)
+                                end
+                            end
+                        end
+                    end
                 end
             end)
 
