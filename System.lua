@@ -65,11 +65,14 @@ local function GetAutoTargetParent()
     return LocalPlayer:WaitForChild("PlayerGui")
 end
 
--- Lấy toạ độ chuột chuẩn xác quy đổi theo hệ quy chiếu của ScreenGui
+-- LẤY TOẠ ĐỘ CHUỘT CHUẨN XÁC: QUY ĐỔI TRỰC TIẾP VỀ HỆ TRỤC CỦA NonUser (CHỐNG LỆCH XUỐNG DƯỚI)
 local function GetExactMousePosition()
     local mouseLoc = UserInputService:GetMouseLocation()
-    if SystemOS.ScreenGui then
-        return mouseLoc - SystemOS.ScreenGui.AbsolutePosition
+    if SystemOS.NonUser then
+        return mouseLoc - SystemOS.NonUser.AbsolutePosition
+    end
+    if SystemOS.ScreenGui and SystemOS.ScreenGui.IgnoreGuiInset then
+        return mouseLoc
     end
     return mouseLoc - GuiService:GetGuiInset()
 end
@@ -1044,7 +1047,7 @@ local function EnsureInitialized(callerSelf, config)
                 local mousePos = GetExactMousePosition()
 
                 if SystemOS.ModalWindow and SystemOS.ModalWindow.Window and SystemOS.ModalWindow.Window.Visible then
-                    local absPos = SystemOS.ModalWindow.Window.AbsolutePosition - SystemOS.ScreenGui.AbsolutePosition
+                    local absPos = SystemOS.ModalWindow.Window.AbsolutePosition - SystemOS.NonUser.AbsolutePosition
                     local absSize = SystemOS.ModalWindow.Window.AbsoluteSize
                     local inModal = (mousePos.X >= absPos.X and mousePos.X <= (absPos.X + absSize.X)
                                     and mousePos.Y >= absPos.Y and mousePos.Y <= (absPos.Y + absSize.Y))
@@ -1057,7 +1060,7 @@ local function EnsureInitialized(callerSelf, config)
                 local clickedInsideWindow = false
                 for _, winObj in ipairs(SystemOS.Windows) do
                     if winObj.Window and winObj.Window.Visible then
-                        local absPos = winObj.Window.AbsolutePosition - SystemOS.ScreenGui.AbsolutePosition
+                        local absPos = winObj.Window.AbsolutePosition - SystemOS.NonUser.AbsolutePosition
                         local absSize = winObj.Window.AbsoluteSize
                         if mousePos.X >= absPos.X and mousePos.X <= (absPos.X + absSize.X)
                            and mousePos.Y >= absPos.Y and mousePos.Y <= (absPos.Y + absSize.Y) then
@@ -1069,7 +1072,7 @@ local function EnsureInitialized(callerSelf, config)
 
                 local clickedTaskbar = false
                 if SystemOS.Taskbar and SystemOS.Taskbar.Visible then
-                    local tPos = SystemOS.Taskbar.AbsolutePosition - SystemOS.ScreenGui.AbsolutePosition
+                    local tPos = SystemOS.Taskbar.AbsolutePosition - SystemOS.NonUser.AbsolutePosition
                     local tSize = SystemOS.Taskbar.AbsoluteSize
                     if mousePos.X >= tPos.X and mousePos.X <= (tPos.X + tSize.X)
                        and mousePos.Y >= tPos.Y and mousePos.Y <= (tPos.Y + tSize.Y) then
@@ -1079,7 +1082,7 @@ local function EnsureInitialized(callerSelf, config)
 
                 local clickedTop = false
                 if SystemOS.Top and SystemOS.Top.Visible then
-                    local topPos = SystemOS.Top.AbsolutePosition - SystemOS.ScreenGui.AbsolutePosition
+                    local topPos = SystemOS.Top.AbsolutePosition - SystemOS.NonUser.AbsolutePosition
                     local topSize = SystemOS.Top.AbsoluteSize
                     if mousePos.X >= topPos.X and mousePos.X <= (topPos.X + topSize.X)
                        and mousePos.Y >= topPos.Y and mousePos.Y <= (topPos.Y + topSize.Y) then
@@ -1236,7 +1239,7 @@ function SystemOS:UnfocusAllWindows()
 end
 
 --------------------------------------------------------------------------------
--- 4. SMART CONTEXTMENU (CHUẨN TOẠ ĐỘ, KHÔNG BỊ NHẢY VỌT LÊN TRÊN)
+-- 4. SMART CONTEXTMENU (CHUẨN TOẠ ĐỘ, KHÔNG BỊ NHẢY VỌT LÊN TRÊN VÀ KHÔNG LỆCH XUỐNG)
 --------------------------------------------------------------------------------
 function SystemOS:CloseAllContextMenus()
     EnsureInitialized(self)
@@ -1251,7 +1254,7 @@ end
 function SystemOS:CreateContextMenu(items, xPos, yPos, parentLayer, subOptions)
     EnsureInitialized(self)
     parentLayer = parentLayer or SystemOS.NonUser
-    local screenSize = SystemOS.ScreenGui and SystemOS.ScreenGui.AbsoluteSize or Vector2.new(1920, 1080)
+    local screenSize = SystemOS.NonUser and SystemOS.NonUser.AbsoluteSize or Vector2.new(1920, 1080)
 
     local MenuFrame = SystemOS.Templates.ContextMenu:Clone()
     MenuFrame.Visible = true
@@ -1370,10 +1373,9 @@ function SystemOS:CreateContextMenu(items, xPos, yPos, parentLayer, subOptions)
                 end
 
                 if item.Items and #item.Items > 0 then
-                    -- Quy đổi toạ độ chính xác về hệ quy chiếu nội bộ của ScreenGui
-                    local originOffset = SystemOS.ScreenGui.AbsolutePosition
-                    local itemGuiY = rowInst.AbsolutePosition.Y - originOffset.Y
-                    local parentGuiX = MenuFrame.AbsolutePosition.X - originOffset.X
+                    local nonUserOrigin = SystemOS.NonUser.AbsolutePosition
+                    local itemGuiY = rowInst.AbsolutePosition.Y - nonUserOrigin.Y
+                    local parentGuiX = MenuFrame.AbsolutePosition.X - nonUserOrigin.X
                     local parentWidth = MenuFrame.AbsoluteSize.X
                     
                     activeSubMenu = SystemOS:CreateContextMenu(item.Items, parentGuiX + parentWidth, itemGuiY, parentLayer, {
@@ -1443,7 +1445,6 @@ function SystemOS:CreateContextMenu(items, xPos, yPos, parentLayer, subOptions)
     local needScroll = false
 
     if subOptions and subOptions.IsSubmenu then
-        -- 1. Xử lý lật Trái / Phải
         local rightSideX = subOptions.ParentX + subOptions.ParentWidth
         if (rightSideX + finalWidth) <= (screenSize.X - 5) then
             targetX = rightSideX
@@ -1451,7 +1452,6 @@ function SystemOS:CreateContextMenu(items, xPos, yPos, parentLayer, subOptions)
             targetX = subOptions.ParentX - finalWidth
         end
 
-        -- 2. Thẳng hàng với nút bấm được trỏ chuột
         targetY = subOptions.ItemY
 
         -- CHỈ DỊCH LÊN KHI THỰC SỰ CHẠM ĐÁY MÀN HÌNH
@@ -1459,7 +1459,6 @@ function SystemOS:CreateContextMenu(items, xPos, yPos, parentLayer, subOptions)
             targetY = screenSize.Y - finalHeight - 10
         end
     else
-        -- Menu cha chính
         if (targetX + finalWidth) > (screenSize.X - 5) then
             targetX = targetX - finalWidth
         end
@@ -1473,7 +1472,6 @@ function SystemOS:CreateContextMenu(items, xPos, yPos, parentLayer, subOptions)
         end
     end
 
-    -- Khóa toạ độ an toàn trong khung nhìn
     targetX = math.clamp(targetX, 5, math.max(5, screenSize.X - finalWidth - 5))
     targetY = math.clamp(targetY, 5, math.max(5, screenSize.Y - finalHeight - 10))
 
@@ -1550,7 +1548,7 @@ local function SetupContextMenuTrigger(guiObject, getItemsCallback)
                         SystemOS.PreventMenuClose = true
                         SystemOS:CloseAllContextMenus()
                         local touchVec = Vector2.new(touchStartPos.X, touchStartPos.Y)
-                        local exactPos = touchVec - SystemOS.ScreenGui.AbsolutePosition
+                        local exactPos = touchVec - SystemOS.NonUser.AbsolutePosition
                         SystemOS:CreateContextMenu(items, exactPos.X, exactPos.Y, SystemOS.NonUser)
                     end
                 end
@@ -1599,7 +1597,7 @@ function SystemOS:AddSystemMenu(logoText, menuItems)
     btn.MouseButton1Click:Connect(function()
         SystemOS.PreventMenuClose = true
         SystemOS:CloseAllContextMenus()
-        local pos = btn.AbsolutePosition - SystemOS.ScreenGui.AbsolutePosition
+        local pos = btn.AbsolutePosition - SystemOS.NonUser.AbsolutePosition
         SystemOS:CreateContextMenu(menuItems, pos.X, pos.Y + btn.AbsoluteSize.Y + 2, SystemOS.NonUser)
     end)
     return btn
@@ -1617,7 +1615,7 @@ function SystemOS:AddTopMenu(name, menuItems)
     btn.MouseButton1Click:Connect(function()
         SystemOS.PreventMenuClose = true
         SystemOS:CloseAllContextMenus()
-        local pos = btn.AbsolutePosition - SystemOS.ScreenGui.AbsolutePosition
+        local pos = btn.AbsolutePosition - SystemOS.NonUser.AbsolutePosition
         SystemOS:CreateContextMenu(menuItems, pos.X, pos.Y + btn.AbsoluteSize.Y + 2, SystemOS.NonUser)
     end)
     return btn
@@ -1893,7 +1891,7 @@ function SystemOS:CreateWindow(config)
 
             local mouseLoc = GetExactMousePosition()
             local dSize = SystemOS.Desktop.AbsoluteSize
-            local dPos = SystemOS.Desktop.AbsolutePosition - SystemOS.ScreenGui.AbsolutePosition
+            local dPos = SystemOS.Desktop.AbsolutePosition - SystemOS.NonUser.AbsolutePosition
 
             local isTopEdge = (mouseLoc.Y <= dPos.Y + 6)
             local isLeftEdge = (mouseLoc.X <= dPos.X + 6)
@@ -2144,7 +2142,7 @@ function SystemOS:DrawOnNonUser(guiType, properties)
 end
 
 --------------------------------------------------------------------------------
--- 9. WORLD RAYCAST CONTEXT MENU (CAMERA - SỬA TRIỆT ĐỂ LỆCH TRÊN DƯỚI)
+-- 9. WORLD RAYCAST CONTEXT MENU (CAMERA - SỬA TRIỆT ĐỂ BẮN RAYCAST TRÚNG CHUẨN XÁC)
 --------------------------------------------------------------------------------
 function SystemOS:BindWorldContextMenu(builderCallback)
     EnsureInitialized(self)
@@ -2155,15 +2153,10 @@ function SystemOS:BindWorldContextMenu(builderCallback)
 
     local function TryWorldRaycast(screenX, screenY)
         local camera = workspace.CurrentCamera
-        local ray
+        if not camera then return end
 
-        -- Dùng ViewportPointToRay hoặc UnitRay để chuẩn xác 100% không lệch
-        if UserInputService.MouseEnabled and LocalPlayer:GetMouse() then
-            ray = LocalPlayer:GetMouse().UnitRay
-        else
-            ray = camera:ViewportPointToRay(screenX, screenY)
-        end
-
+        -- SỬ DỤNG VIEWPORTPOINTTORAY ĐẢM BẢO CHUẨN XÁC VỚI GETMOUSELOCATION
+        local ray = camera:ViewportPointToRay(screenX, screenY)
         if not ray then return end
 
         local params = RaycastParams.new()
