@@ -9,8 +9,8 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local Mouse = LocalPlayer:GetMouse()
 
-local FADE_TIME = 0.12
-local FADE_TWEEN = TweenInfo.new(FADE_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local FADE_TIME = 0.14
+local FADE_TWEEN = TweenInfo.new(FADE_TIME, Enum.EasingStyle.Linear)
 local WIN10_ANIM_INFO = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local SNAP_TWEEN_INFO = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local TASKBAR_SLIDE_INFO = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
@@ -35,7 +35,6 @@ SystemOS.AutoHideTaskbar = false
 local taskbarShowing = true
 local mouseLeaveTaskbarTime = 0
 local autoHideTaskbarTween = nil
-local lastMenuOpenClock = 0 -- Chống kẹt click đóng menu
 
 local function GetAutoTargetParent()
     if RunService:IsStudio() then
@@ -44,27 +43,34 @@ local function GetAutoTargetParent()
 
     if typeof(gethui) == "function" then
         local ok, hui = pcall(gethui)
-        if ok and hui then return hui end
+        if ok and hui then
+            return hui
+        end
     end
 
-    local okCore, coreGui = pcall(function() return game:GetService("CoreGui") end)
+    local okCore, coreGui = pcall(function()
+        return game:GetService("CoreGui")
+    end)
     if okCore and coreGui then
         local canAccess = pcall(function()
             local test = Instance.new("Folder")
             test.Parent = coreGui
             test:Destroy()
         end)
-        if canAccess then return coreGui end
+        if canAccess then
+            return coreGui
+        end
     end
 
     return LocalPlayer:WaitForChild("PlayerGui")
 end
 
--- LẤY TOẠ ĐỘ CHUỘT CHUẨN XÁC: FIX LỆCH CHUỘT PHẢI
+-- HÀM LẤY TOẠ ĐỘ CHUỘT CHUẨN XÁC: FIX LỆCH XUỐNG CHO CHUỘT PHẢI
 local function GetExactMousePosition()
     if SystemOS.ScreenGui and SystemOS.ScreenGui.IgnoreGuiInset then
         return UserInputService:GetMouseLocation()
     end
+    -- Khi IgnoreGuiInset = false: Dùng Mouse.X và Mouse.Y (Toạ độ GUI gốc của Roblox chuẩn 100%)
     if LocalPlayer and LocalPlayer:GetMouse() then
         local m = LocalPlayer:GetMouse()
         return Vector2.new(m.X, m.Y)
@@ -114,18 +120,16 @@ local function HideTaskbarAnim()
 end
 
 --------------------------------------------------------------------------------
--- 1. BẢN VẼ G2L GỐC - ĐẦY ĐỦ 100% 176 INSTANCES (KHÔNG CẮT BỚT BẤT KỲ CÁI GÌ)
+-- 1. BẢN VẼ G2L GỐC
 --------------------------------------------------------------------------------
 local function BuildOriginalStructure()
     local G2L = {}
 
-    -- StarterGui.SystemUI
     G2L["1"] = Instance.new("ScreenGui")
     G2L["1"]["Name"] = [[SystemUI]]
     G2L["1"]["ZIndexBehavior"] = Enum.ZIndexBehavior.Sibling
     G2L["1"]["DisplayOrder"] = 2147483647
 
-    -- StarterGui.SystemUI.Top
     G2L["2"] = Instance.new("Frame", G2L["1"])
     G2L["2"]["BorderSizePixel"] = 0
     G2L["2"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255)
@@ -139,7 +143,6 @@ local function BuildOriginalStructure()
     G2L["3"]["Rotation"] = 90
     G2L["3"]["Color"] = ColorSequence.new{ColorSequenceKeypoint.new(0.000, Color3.fromRGB(85, 85, 85)),ColorSequenceKeypoint.new(1.000, Color3.fromRGB(0, 0, 0))}
 
-    -- StarterGui.SystemUI.Top._SYSTEM
     G2L["4"] = Instance.new("Frame", G2L["2"])
     G2L["4"]["BorderSizePixel"] = 0
     G2L["4"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255)
@@ -155,7 +158,6 @@ local function BuildOriginalStructure()
     G2L["5"]["SortOrder"] = Enum.SortOrder.LayoutOrder
     G2L["5"]["FillDirection"] = Enum.FillDirection.Horizontal
 
-    -- StarterGui.SystemUI.Top._SYSTEM.Menu
     G2L["6"] = Instance.new("ImageButton", G2L["4"])
     G2L["6"]["BorderSizePixel"] = 0
     G2L["6"]["ScaleType"] = Enum.ScaleType.Fit
@@ -187,7 +189,6 @@ local function BuildOriginalStructure()
     G2L["9"]["SortOrder"] = Enum.SortOrder.LayoutOrder
     G2L["9"]["FillDirection"] = Enum.FillDirection.Horizontal
 
-    -- StarterGui.SystemUI.Top.Custom
     G2L["a"] = Instance.new("Frame", G2L["2"])
     G2L["a"]["BorderSizePixel"] = 0
     G2L["a"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255)
@@ -197,7 +198,6 @@ local function BuildOriginalStructure()
     G2L["a"]["LayoutOrder"] = 1
     G2L["a"]["BackgroundTransparency"] = 1
 
-    -- StarterGui.SystemUI.Top.Custom.Game
     G2L["b"] = Instance.new("ImageButton", G2L["a"])
     G2L["b"]["BorderSizePixel"] = 0
     G2L["b"]["ScaleType"] = Enum.ScaleType.Fit
@@ -231,7 +231,7 @@ local function BuildOriginalStructure()
     G2L["e"]["SortOrder"] = Enum.SortOrder.LayoutOrder
     G2L["e"]["FillDirection"] = Enum.FillDirection.Horizontal
 
-    -- StarterGui.SystemUI.Container_MAINDESTOP
+    -- Container Desktop
     G2L["f"] = Instance.new("Frame", G2L["1"])
     G2L["f"]["BorderSizePixel"] = 0
     G2L["f"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255)
@@ -258,7 +258,7 @@ local function BuildOriginalStructure()
     spStroke.Color = Color3.fromRGB(0, 150, 255)
     spStroke.Thickness = 1.5
 
-    -- StarterGui.SystemUI.Container_MAINDESTOP.Window (ImageButton chống click xuyên)
+    -- Window ImageButton
     G2L["10"] = Instance.new("ImageButton", G2L["f"])
     G2L["10"]["BorderSizePixel"] = 0
     G2L["10"]["AutoButtonColor"] = false
@@ -381,7 +381,7 @@ local function BuildOriginalStructure()
     G2L["24"]["CornerRadius"] = UDim.new(0, 5)
     G2L["25"] = Instance.new("UIStroke", G2L["10"])
 
-    -- Canvas Frame (Khóa ClipsDescendants = true)
+    -- Canvas là Frame sắc nét + khóa ClipsDescendants = true
     G2L["26"] = Instance.new("Frame", G2L["10"])
     G2L["26"]["BorderSizePixel"] = 0
     G2L["26"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255)
@@ -391,7 +391,6 @@ local function BuildOriginalStructure()
     G2L["26"]["Name"] = [[Canvas]]
     G2L["26"]["ClipsDescendants"] = true
 
-    -- ResizeSystem
     G2L["27"] = Instance.new("Folder", G2L["10"])
     G2L["27"]["Name"] = [[ResizeSystem]]
 
@@ -417,8 +416,8 @@ local function BuildOriginalStructure()
     G2L["2e"] = MakeResizeHandle([[Right-Bottom]], Vector2.new(0.5, 0.5), UDim2.new(0, 0, 1, 0), UDim2.new(0, 10, 0, 10))
     G2L["2f"] = MakeResizeHandle([[Left-Bottom]], Vector2.new(0.5, 0.5), UDim2.new(1, 0, 1, 0), UDim2.new(0, 10, 0, 10))
 
-    -- StarterGui.SystemUI.Container_MAINDESTOP.ContextMenu
-    G2L["30"] = Instance.new("CanvasGroup", G2L["f"])
+    -- ContextMenu
+    G2L["30"] = Instance.new("Frame", G2L["f"])
     G2L["30"]["BorderSizePixel"] = 0
     G2L["30"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255)
     G2L["30"]["AutomaticSize"] = Enum.AutomaticSize.None
@@ -426,7 +425,6 @@ local function BuildOriginalStructure()
     G2L["30"]["BorderColor3"] = Color3.fromRGB(0, 0, 0)
     G2L["30"]["Name"] = [[ContextMenu]]
     G2L["30"]["ZIndex"] = 99999
-    G2L["30"]["GroupTransparency"] = 1
 
     -- Template: Button_HoldEffect
     G2L["31"] = Instance.new("TextButton", G2L["30"])
@@ -712,78 +710,6 @@ local function BuildOriginalStructure()
     AddPixelLine(G2L["4f"], 6, 12)
     AddPixelLine(G2L["4f"], 7, 14)
 
-    -- Template: Submenu_HoldEffect
-    G2L["58"] = Instance.new("TextButton", G2L["30"])
-    G2L["58"]["BorderSizePixel"] = 0
-    G2L["58"]["TextSize"] = 14
-    G2L["58"]["AutoButtonColor"] = false
-    G2L["58"]["TextColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["58"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255)
-    G2L["58"]["FontFace"] = Font.new([[rbxasset://fonts/families/SourceSansPro.json]], Enum.FontWeight.Regular, Enum.FontStyle.Normal)
-    G2L["58"]["Size"] = UDim2.new(1, 0, 0, 25)
-    G2L["58"]["BorderColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["58"]["Text"] = [[]]
-    G2L["58"]["Name"] = [[Submenu_HoldEffect]]
-
-    G2L["59"] = Instance.new("Frame", G2L["58"])
-    G2L["59"]["BorderSizePixel"] = 0
-    G2L["59"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255)
-    G2L["59"]["Size"] = UDim2.new(0, 20, 1, 0)
-    G2L["59"]["BorderColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["59"]["Name"] = [[BOX]]
-    G2L["59"]["BackgroundTransparency"] = 1
-
-    G2L["5a"] = Instance.new("UIListLayout", G2L["58"])
-    G2L["5a"]["VerticalAlignment"] = Enum.VerticalAlignment.Center
-    G2L["5a"]["SortOrder"] = Enum.SortOrder.LayoutOrder
-    G2L["5a"]["FillDirection"] = Enum.FillDirection.Horizontal
-
-    G2L["5b"] = Instance.new("UIGradient", G2L["58"])
-    G2L["5b"]["Rotation"] = 90
-    G2L["5b"]["Color"] = ColorSequence.new{ColorSequenceKeypoint.new(0.000, Color3.fromRGB(158, 209, 255)),ColorSequenceKeypoint.new(1.000, Color3.fromRGB(127, 168, 205))}
-
-    G2L["5c"] = Instance.new("Frame", G2L["58"])
-    G2L["5c"]["BorderSizePixel"] = 0
-    G2L["5c"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255)
-    G2L["5c"]["Size"] = UDim2.new(1, -45, 1, 0)
-    G2L["5c"]["BorderColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["5c"]["Name"] = [[Content]]
-    G2L["5c"]["LayoutOrder"] = 1
-    G2L["5c"]["BackgroundTransparency"] = 1
-
-    G2L["5d"] = Instance.new("TextLabel", G2L["5c"])
-    G2L["5d"]["BorderSizePixel"] = 0
-    G2L["5d"]["TextSize"] = 14
-    G2L["5d"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255)
-    G2L["5d"]["FontFace"] = Font.new([[rbxasset://fonts/families/Ubuntu.json]], Enum.FontWeight.Regular, Enum.FontStyle.Normal)
-    G2L["5d"]["TextColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["5d"]["BackgroundTransparency"] = 1
-    G2L["5d"]["Size"] = UDim2.new(0, 0, 1, 0)
-    G2L["5d"]["BorderColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["5d"]["AutomaticSize"] = Enum.AutomaticSize.X
-
-    G2L["5e"] = Instance.new("Frame", G2L["58"])
-    G2L["5e"]["BorderSizePixel"] = 0
-    G2L["5e"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255)
-    G2L["5e"]["Size"] = UDim2.new(0, 25, 1, 0)
-    G2L["5e"]["BorderColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["5e"]["Name"] = [[Right]]
-    G2L["5e"]["LayoutOrder"] = 2
-    G2L["5e"]["BackgroundTransparency"] = 1
-
-    G2L["5f"] = Instance.new("ImageLabel", G2L["5e"])
-    G2L["5f"]["BorderSizePixel"] = 0
-    G2L["5f"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255)
-    G2L["5f"]["AnchorPoint"] = Vector2.new(0.5, 0.5)
-    G2L["5f"]["Size"] = UDim2.new(1, -10, 1, -10)
-    G2L["5f"]["BorderColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["5f"]["BackgroundTransparency"] = 1
-    G2L["5f"]["Position"] = UDim2.new(0.5, 0, 0.5, 0)
-
-    for i = 0, 7 do
-        AddPixelLine(G2L["5f"], i, i * 2, Color3.fromRGB(0, 0, 0))
-    end
-
     -- Template: Separator
     G2L["68"] = Instance.new("Frame", G2L["30"])
     G2L["68"]["BorderSizePixel"] = 0
@@ -808,77 +734,6 @@ local function BuildOriginalStructure()
     G2L["6a"]["Size"] = UDim2.new(1, 0, 0.5, 0)
     G2L["6a"]["Position"] = UDim2.new(0, 0, 1, 0)
     G2L["6a"]["BorderColor3"] = Color3.fromRGB(0, 0, 0)
-
-    -- Template: Tick_Select_HoldEffect
-    G2L["6b"] = Instance.new("TextButton", G2L["30"])
-    G2L["6b"]["BorderSizePixel"] = 0
-    G2L["6b"]["TextSize"] = 14
-    G2L["6b"]["AutoButtonColor"] = false
-    G2L["6b"]["TextColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["6b"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255)
-    G2L["6b"]["FontFace"] = Font.new([[rbxasset://fonts/families/SourceSansPro.json]], Enum.FontWeight.Regular, Enum.FontStyle.Normal)
-    G2L["6b"]["Size"] = UDim2.new(1, 0, 0, 25)
-    G2L["6b"]["BorderColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["6b"]["Text"] = [[]]
-    G2L["6b"]["Name"] = [[Tick_Select_HoldEffect]]
-
-    G2L["6c"] = Instance.new("Frame", G2L["6b"])
-    G2L["6c"]["BorderSizePixel"] = 0
-    G2L["6c"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255)
-    G2L["6c"]["Size"] = UDim2.new(0, 20, 1, 0)
-    G2L["6c"]["BorderColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["6c"]["Name"] = [[BOX]]
-    G2L["6c"]["BackgroundTransparency"] = 1
-
-    G2L["6d"] = Instance.new("Frame", G2L["6c"])
-    G2L["6d"]["BorderSizePixel"] = 0
-    G2L["6d"]["BackgroundColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["6d"]["AnchorPoint"] = Vector2.new(0.5, 0.5)
-    G2L["6d"]["Size"] = UDim2.new(1, -5, 1, -5)
-    G2L["6d"]["Position"] = UDim2.new(0.5, 0, 0.5, 0)
-    G2L["6d"]["BorderColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["6d"]["Name"] = [[Tick]]
-
-    G2L["6e"] = Instance.new("UICorner", G2L["6d"])
-    G2L["6e"]["CornerRadius"] = UDim.new(1, 0)
-
-    G2L["6f"] = Instance.new("UIListLayout", G2L["6b"])
-    G2L["6f"]["VerticalAlignment"] = Enum.VerticalAlignment.Center
-    G2L["6f"]["SortOrder"] = Enum.SortOrder.LayoutOrder
-    G2L["6f"]["FillDirection"] = Enum.FillDirection.Horizontal
-
-    G2L["70"] = Instance.new("UIGradient", G2L["6b"])
-    G2L["70"]["Rotation"] = 90
-    G2L["70"]["Color"] = ColorSequence.new{ColorSequenceKeypoint.new(0.000, Color3.fromRGB(158, 209, 255)),ColorSequenceKeypoint.new(1.000, Color3.fromRGB(127, 168, 205))}
-
-    G2L["71"] = Instance.new("Frame", G2L["6b"])
-    G2L["71"]["BorderSizePixel"] = 0
-    G2L["71"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255)
-    G2L["71"]["Size"] = UDim2.new(1, -45, 1, 0)
-    G2L["71"]["BorderColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["71"]["Name"] = [[Content]]
-    G2L["71"]["LayoutOrder"] = 1
-    G2L["71"]["BackgroundTransparency"] = 1
-
-    G2L["72"] = Instance.new("TextLabel", G2L["71"])
-    G2L["72"]["BorderSizePixel"] = 0
-    G2L["72"]["TextSize"] = 14
-    G2L["72"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255)
-    G2L["72"]["FontFace"] = Font.new([[rbxasset://fonts/families/Ubuntu.json]], Enum.FontWeight.Regular, Enum.FontStyle.Normal)
-    G2L["72"]["TextColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["72"]["BackgroundTransparency"] = 1
-    G2L["72"]["Size"] = UDim2.new(0, 0, 1, 0)
-    G2L["72"]["BorderColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["72"]["AutomaticSize"] = Enum.AutomaticSize.X
-
-    G2L["73"] = Instance.new("Frame", G2L["6b"])
-    G2L["73"]["BorderSizePixel"] = 0
-    G2L["73"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255)
-    G2L["73"]["Size"] = UDim2.new(0, 25, 1, 0)
-    G2L["73"]["BorderColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["73"]["Name"] = [[Right]]
-    G2L["73"]["LayoutOrder"] = 2
-    G2L["73"]["BackgroundTransparency"] = 1
 
     -- Template: Button_Disable
     G2L["74"] = Instance.new("TextButton", G2L["30"])
@@ -1020,42 +875,7 @@ local function BuildOriginalStructure()
     G2L["8c"]["Rotation"] = 90
     G2L["8c"]["Color"] = ColorSequence.new{ColorSequenceKeypoint.new(0.000, Color3.fromRGB(37, 37, 37)),ColorSequenceKeypoint.new(1.000, Color3.fromRGB(67, 67, 67))}
 
-    G2L["8d"] = Instance.new("UIListLayout", G2L["30"])
-    G2L["8d"]["Padding"] = UDim.new(0, 1)
-    G2L["8d"]["SortOrder"] = Enum.SortOrder.LayoutOrder
-
-    -- StarterGui.SystemUI._Toolbar (KHÔI PHỤC ĐẦY ĐỦ)
-    G2L["8e"] = Instance.new("Frame", G2L["1"])
-    G2L["8e"]["Visible"] = false
-    G2L["8e"]["BorderSizePixel"] = 0
-    G2L["8e"]["BackgroundColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["8e"]["Size"] = UDim2.new(1, 0, 0, 100)
-    G2L["8e"]["Position"] = UDim2.new(0, 0, 0, 20)
-    G2L["8e"]["BorderColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["8e"]["Name"] = [[_Toolbar]]
-    G2L["8e"]["BackgroundTransparency"] = 0.2
-
-    G2L["8f"] = Instance.new("TextButton", G2L["8e"])
-    G2L["8f"]["BorderSizePixel"] = 0
-    G2L["8f"]["TextSize"] = 10
-    G2L["8f"]["AutoButtonColor"] = false
-    G2L["8f"]["TextColor3"] = Color3.fromRGB(255, 255, 255)
-    G2L["8f"]["BackgroundColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["8f"]["FontFace"] = Font.new([[rbxasset://fonts/families/Ubuntu.json]], Enum.FontWeight.Regular, Enum.FontStyle.Normal)
-    G2L["8f"]["Size"] = UDim2.new(1, 0, 0, 10)
-    G2L["8f"]["BorderColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["8f"]["Text"] = [[Hide]]
-    G2L["8f"]["Name"] = [[Hide]]
-    G2L["8f"]["Position"] = UDim2.new(0, 0, 1, 0)
-
-    G2L["90"] = Instance.new("Frame", G2L["8e"])
-    G2L["90"]["BorderSizePixel"] = 0
-    G2L["90"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255)
-    G2L["90"]["Size"] = UDim2.new(1, 0, 1, 0)
-    G2L["90"]["BorderColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["90"]["Name"] = [[Container]]
-
-    -- StarterGui.SystemUI.Taskbar
+    -- Taskbar
     G2L["91"] = Instance.new("ImageButton", G2L["1"])
     G2L["91"]["BorderSizePixel"] = 0
     G2L["91"]["AutoButtonColor"] = false
@@ -1139,7 +959,7 @@ local function BuildOriginalStructure()
     G2L["a0"]["AutomaticSize"] = Enum.AutomaticSize.X
     G2L["a0"]["Name"] = [[TItle]]
 
-    -- StarterGui.SystemUI.NonUser
+    -- NonUser
     G2L["a1"] = Instance.new("Frame", G2L["1"])
     G2L["a1"]["BorderSizePixel"] = 0
     G2L["a1"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255)
@@ -1150,132 +970,6 @@ local function BuildOriginalStructure()
     G2L["a1"]["BackgroundTransparency"] = 1
     G2L["a1"]["ZIndex"] = 999999
 
-    -- StarterGui.SystemUI.LoginFrame (KHÔI PHỤC ĐẦY ĐỦ)
-    G2L["a2"] = Instance.new("ImageButton", G2L["1"])
-    G2L["a2"]["BorderSizePixel"] = 0
-    G2L["a2"]["AutoButtonColor"] = false
-    G2L["a2"]["Visible"] = false
-    G2L["a2"]["BackgroundColor3"] = Color3.fromRGB(34, 34, 34)
-    G2L["a2"]["ZIndex"] = 999999999
-    G2L["a2"]["Size"] = UDim2.new(1, 0, 1, 0)
-    G2L["a2"]["BorderColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["a2"]["Name"] = [[LoginFrame]]
-
-    G2L["a3"] = Instance.new("Frame", G2L["a2"])
-    G2L["a3"]["BorderSizePixel"] = 0
-    G2L["a3"]["BackgroundColor3"] = Color3.fromRGB(67, 67, 67)
-    G2L["a3"]["AnchorPoint"] = Vector2.new(0.5, 0.5)
-    G2L["a3"]["AutomaticSize"] = Enum.AutomaticSize.Y
-    G2L["a3"]["Size"] = UDim2.new(0, 400, 0, 50)
-    G2L["a3"]["Position"] = UDim2.new(0.5, 0, 0.5, 0)
-    G2L["a3"]["BorderColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["a3"]["Name"] = [[mainLogin]]
-
-    G2L["a4"] = Instance.new("UIStroke", G2L["a3"])
-
-    G2L["a5"] = Instance.new("TextBox", G2L["a3"])
-    G2L["a5"]["CursorPosition"] = -1
-    G2L["a5"]["Name"] = [[CustomName]]
-    G2L["a5"]["BorderSizePixel"] = 0
-    G2L["a5"]["TextSize"] = 14
-    G2L["a5"]["TextColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["a5"]["BackgroundColor3"] = Color3.fromRGB(85, 85, 85)
-    G2L["a5"]["FontFace"] = Font.new([[rbxasset://fonts/families/SourceSansPro.json]], Enum.FontWeight.Regular, Enum.FontStyle.Normal)
-    G2L["a5"]["AnchorPoint"] = Vector2.new(0.5, 0)
-    G2L["a5"]["Size"] = UDim2.new(1, -20, 0, 25)
-    G2L["a5"]["Position"] = UDim2.new(0.5, 0, 0.17778, 0)
-    G2L["a5"]["BorderColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["a5"]["Text"] = [[]]
-    G2L["a5"]["LayoutOrder"] = 1
-
-    G2L["a6"] = Instance.new("UIStroke", G2L["a5"])
-    G2L["a6"]["Enabled"] = false
-    G2L["a6"]["Thickness"] = 1.6
-    G2L["a6"]["Color"] = Color3.fromRGB(29, 131, 255)
-    G2L["a6"]["ApplyStrokeMode"] = Enum.ApplyStrokeMode.Border
-    G2L["a6"]["LineJoinMode"] = Enum.LineJoinMode.Miter
-    G2L["a6"]["Name"] = [[InputEffect]]
-
-    G2L["a7"] = Instance.new("UIStroke", G2L["a5"])
-    G2L["a7"]["ApplyStrokeMode"] = Enum.ApplyStrokeMode.Border
-
-    G2L["a8"] = Instance.new("UIPadding", G2L["a3"])
-    G2L["a8"]["PaddingTop"] = UDim.new(0, 10)
-    G2L["a8"]["PaddingBottom"] = UDim.new(0, 10)
-
-    G2L["a9"] = Instance.new("UIListLayout", G2L["a3"])
-    G2L["a9"]["HorizontalAlignment"] = Enum.HorizontalAlignment.Center
-    G2L["a9"]["Padding"] = UDim.new(0, 10)
-    G2L["a9"]["SortOrder"] = Enum.SortOrder.LayoutOrder
-
-    G2L["aa"] = Instance.new("TextLabel", G2L["a3"])
-    G2L["aa"]["TextWrapped"] = true
-    G2L["aa"]["BorderSizePixel"] = 0
-    G2L["aa"]["TextSize"] = 14
-    G2L["aa"]["TextScaled"] = true
-    G2L["aa"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255)
-    G2L["aa"]["FontFace"] = Font.new([[rbxasset://fonts/families/Ubuntu.json]], Enum.FontWeight.Regular, Enum.FontStyle.Normal)
-    G2L["aa"]["TextColor3"] = Color3.fromRGB(255, 255, 255)
-    G2L["aa"]["BackgroundTransparency"] = 1
-    G2L["aa"]["Size"] = UDim2.new(0, 200, 0, 20)
-    G2L["aa"]["BorderColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["aa"]["Text"] = [[Text]]
-    G2L["aa"]["Name"] = [[1]]
-
-    G2L["ab"] = Instance.new("TextLabel", G2L["a3"])
-    G2L["ab"]["TextWrapped"] = true
-    G2L["ab"]["BorderSizePixel"] = 0
-    G2L["ab"]["TextSize"] = 14
-    G2L["ab"]["TextScaled"] = true
-    G2L["ab"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255)
-    G2L["ab"]["FontFace"] = Font.new([[rbxasset://fonts/families/Ubuntu.json]], Enum.FontWeight.Regular, Enum.FontStyle.Normal)
-    G2L["ab"]["TextColor3"] = Color3.fromRGB(255, 255, 255)
-    G2L["ab"]["BackgroundTransparency"] = 1
-    G2L["ab"]["Size"] = UDim2.new(0, 200, 0, 20)
-    G2L["ab"]["BorderColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["ab"]["Text"] = [[Text]]
-    G2L["ab"]["LayoutOrder"] = 2
-    G2L["ab"]["Name"] = [[2]]
-
-    G2L["ac"] = Instance.new("TextBox", G2L["a3"])
-    G2L["ac"]["CursorPosition"] = -1
-    G2L["ac"]["Name"] = [[CustomPass]]
-    G2L["ac"]["BorderSizePixel"] = 0
-    G2L["ac"]["TextSize"] = 14
-    G2L["ac"]["TextColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["ac"]["BackgroundColor3"] = Color3.fromRGB(85, 85, 85)
-    G2L["ac"]["FontFace"] = Font.new([[rbxasset://fonts/families/SourceSansPro.json]], Enum.FontWeight.Regular, Enum.FontStyle.Normal)
-    G2L["ac"]["AnchorPoint"] = Vector2.new(0.5, 0)
-    G2L["ac"]["Size"] = UDim2.new(1, -20, 0, 25)
-    G2L["ac"]["Position"] = UDim2.new(0.5, 0, 0, 0)
-    G2L["ac"]["BorderColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["ac"]["Text"] = [[]]
-    G2L["ac"]["LayoutOrder"] = 3
-
-    G2L["ad"] = Instance.new("UIStroke", G2L["ac"])
-    G2L["ad"]["Enabled"] = false
-    G2L["ad"]["Thickness"] = 1.6
-    G2L["ad"]["Color"] = Color3.fromRGB(29, 131, 255)
-    G2L["ad"]["ApplyStrokeMode"] = Enum.ApplyStrokeMode.Border
-    G2L["ad"]["LineJoinMode"] = Enum.LineJoinMode.Miter
-    G2L["ad"]["Name"] = [[InputEffect]]
-
-    G2L["ae"] = Instance.new("UIStroke", G2L["ac"])
-    G2L["ae"]["ApplyStrokeMode"] = Enum.ApplyStrokeMode.Border
-
-    G2L["af"] = Instance.new("TextButton", G2L["a3"])
-    G2L["af"]["BorderSizePixel"] = 0
-    G2L["af"]["TextSize"] = 14
-    G2L["af"]["AutoButtonColor"] = false
-    G2L["af"]["TextColor3"] = Color3.fromRGB(255, 255, 255)
-    G2L["af"]["BackgroundColor3"] = Color3.fromRGB(86, 171, 255)
-    G2L["af"]["FontFace"] = Font.new([[rbxasset://fonts/families/Ubuntu.json]], Enum.FontWeight.Bold, Enum.FontStyle.Normal)
-    G2L["af"]["Size"] = UDim2.new(0, 200, 0, 30)
-    G2L["af"]["LayoutOrder"] = 4
-    G2L["af"]["BorderColor3"] = Color3.fromRGB(0, 0, 0)
-    G2L["af"]["Text"] = [[Login]]
-
-    -- StarterGui.SystemUI.UIScale
     G2L["b0"] = Instance.new("UIScale", G2L["1"])
 
     return G2L, SnapPreview
@@ -1317,10 +1011,8 @@ local function EnsureInitialized(callerSelf, config)
     SystemOS.SystemContainer = G2L["4"]
     SystemOS.CustomContainer = G2L["a"]
     SystemOS.Desktop = G2L["f"]
-    SystemOS.Toolbar = G2L["8e"]
     SystemOS.Taskbar = G2L["91"]
     SystemOS.NonUser = G2L["a1"]
-    SystemOS.LoginFrame = G2L["a2"]
     SystemOS.UIScale = G2L["b0"]
     SystemOS.SnapPreview = SnapPreview
     SystemOS.AutoHideTaskbar = (config.AutoHideTaskbar == true)
@@ -1341,33 +1033,17 @@ local function EnsureInitialized(callerSelf, config)
     G2L["95"]:Destroy()
     G2L["9b"]:Destroy()
 
-    -- CLICK RA NGOÀI ĐÓNG CONTEXTMENU NGAY LẬP TỨC TRONG 1 LẦN NHẤP
+    -- CLICK RA NGOÀI ĐỂ ĐÓNG CONTEXTMENU & UNFOCUS WINDOW
     UserInputService.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 then
-            -- Nếu vừa mở menu xong trong vòng 0.05s thì bỏ qua (chính là cú click mở menu)
-            if os.clock() - lastMenuOpenClock > 0.05 then
-                local mousePos = UserInputService:GetMouseLocation()
-                local clickedInsideMenu = false
-
-                for _, menu in ipairs(SystemOS.ActiveContextMenus) do
-                    if menu and menu.Parent then
-                        local abs = menu.AbsolutePosition
-                        local sz = menu.AbsoluteSize
-                        if mousePos.X >= abs.X and mousePos.X <= (abs.X + sz.X)
-                           and mousePos.Y >= abs.Y and mousePos.Y <= (abs.Y + sz.Y) then
-                            clickedInsideMenu = true
-                            break
-                        end
-                    end
+            task.defer(function()
+                if SystemOS.PreventMenuClose then
+                    SystemOS.PreventMenuClose = false
+                    return
                 end
+                SystemOS:CloseAllContextMenus()
+            end)
 
-                -- Nếu bấm ra ngoài thì đóng ngay lập tức
-                if not clickedInsideMenu then
-                    SystemOS:CloseAllContextMenus()
-                end
-            end
-
-            -- Xử lý Unfocus Window
             if input.UserInputType == Enum.UserInputType.MouseButton1 then
                 if SystemOS.PreventUnfocus then
                     SystemOS.PreventUnfocus = false
@@ -1569,17 +1245,13 @@ function SystemOS:UnfocusAllWindows()
 end
 
 --------------------------------------------------------------------------------
--- 4. SMART CONTEXTMENU (HOẠT ẢNH FADE GỐC + 1 CLICK ĐÓNG NGAY + SUBMENU THẲNG HÀNG)
+-- 4. SMART CONTEXTMENU (FIX LỆCH CHUỘT PHẢI & THẲNG HÀNG NÚT SUBMENU)
 --------------------------------------------------------------------------------
 function SystemOS:CloseAllContextMenus()
     EnsureInitialized(self)
     for _, menu in ipairs(SystemOS.ActiveContextMenus) do
         if menu and menu.Parent then
-            local tw = TweenService:Create(menu, FADE_TWEEN, { GroupTransparency = 1 })
-            tw:Play()
-            tw.Completed:Connect(function()
-                menu:Destroy()
-            end)
+            menu:Destroy()
         end
     end
     SystemOS.ActiveContextMenus = {}
@@ -1587,7 +1259,6 @@ end
 
 function SystemOS:CreateContextMenu(items, xPos, yPos, parentLayer, subOptions)
     EnsureInitialized(self)
-    lastMenuOpenClock = os.clock() -- Ghi nhận thời điểm mở menu để 1 click ngoài là đóng ngay
     parentLayer = parentLayer or SystemOS.NonUser
     local screenSize = SystemOS.ScreenGui and SystemOS.ScreenGui.AbsoluteSize or Vector2.new(1920, 1080)
 
@@ -1596,7 +1267,6 @@ function SystemOS:CreateContextMenu(items, xPos, yPos, parentLayer, subOptions)
     MenuFrame.AutomaticSize = Enum.AutomaticSize.None
     MenuFrame.ClipsDescendants = true
     MenuFrame.Parent = parentLayer
-    MenuFrame.GroupTransparency = 1
 
     local t_Btn = MenuFrame:WaitForChild("Button"):Clone()
     local t_Tick = MenuFrame:WaitForChild("Tick_Select"):Clone()
@@ -1680,6 +1350,7 @@ function SystemOS:CreateContextMenu(items, xPos, yPos, parentLayer, subOptions)
             end)
 
             rowInst.MouseButton1Click:Connect(function()
+                SystemOS.PreventMenuClose = true
                 item.Checked = not item.Checked
                 if tickDot then tickDot.Visible = (item.Checked == true) end
                 SystemOS:CloseAllContextMenus()
@@ -1708,7 +1379,7 @@ function SystemOS:CreateContextMenu(items, xPos, yPos, parentLayer, subOptions)
                 end
 
                 if item.Items and #item.Items > 0 then
-                    -- TÍNH TOẠ ĐỘ SUBMENU CHUẨN XÁC NỘI BỘ (KHÔNG BỊ NHẢY LÊN ĐỈNH)
+                    -- ĐỒNG BỘ TOẠ ĐỘ SUBMENU CHUẨN XÁC: LẤY ĐỘ LỆCH TRỰC TIẾP TỪ NÚT BẤM
                     local rowOffset = rowInst.AbsolutePosition - MenuFrame.AbsolutePosition
                     local subY = MenuFrame.Position.Y.Offset + rowOffset.Y
                     local subX = MenuFrame.Position.X.Offset + MenuFrame.AbsoluteSize.X
@@ -1771,12 +1442,16 @@ function SystemOS:CreateContextMenu(items, xPos, yPos, parentLayer, subOptions)
 
     totalHeight = totalHeight + 4
 
+    ----------------------------------------------------------------------------
+    -- THUẬT TOÁN ĐỊNH VỊ: KHÔNG LỆCH CON TRỎ CHUỘT & SUBMENU THẲNG HÀNG
+    ----------------------------------------------------------------------------
     local targetX = xPos
     local targetY = yPos
     local finalHeight = totalHeight
     local needScroll = false
 
     if subOptions and subOptions.IsSubmenu then
+        -- 1. Lật Trái / Phải
         local rightSideX = subOptions.ParentX + subOptions.ParentWidth
         if (rightSideX + finalWidth) <= (screenSize.X - 5) then
             targetX = rightSideX
@@ -1784,6 +1459,7 @@ function SystemOS:CreateContextMenu(items, xPos, yPos, parentLayer, subOptions)
             targetX = subOptions.ParentX - finalWidth
         end
 
+        -- 2. Thẳng hàng ngang tuyệt đối với nút được trỏ vào
         targetY = subOptions.ItemY
 
         -- CHỈ DỊCH LÊN KHI THỰC SỰ CHẠM ĐÁY MÀN HÌNH
@@ -1792,10 +1468,12 @@ function SystemOS:CreateContextMenu(items, xPos, yPos, parentLayer, subOptions)
         end
         if targetY < 5 then targetY = 5 end
     else
+        -- Menu gốc: Lật trái nếu sát mép phải
         if (targetX + finalWidth) > (screenSize.X - 5) then
             targetX = targetX - finalWidth
         end
 
+        -- Lật lên nếu sát đáy
         if (targetY + finalHeight) > (screenSize.Y - 10) then
             if (yPos - finalHeight) >= 5 then
                 targetY = yPos - finalHeight
@@ -1805,6 +1483,7 @@ function SystemOS:CreateContextMenu(items, xPos, yPos, parentLayer, subOptions)
         end
     end
 
+    -- Khóa an toàn trong vùng nhìn
     targetX = math.clamp(targetX, 5, math.max(5, screenSize.X - finalWidth - 5))
     targetY = math.clamp(targetY, 5, math.max(5, screenSize.Y - finalHeight - 10))
 
@@ -1822,16 +1501,11 @@ function SystemOS:CreateContextMenu(items, xPos, yPos, parentLayer, subOptions)
     Scroll.ScrollingEnabled = needScroll
 
     table.insert(SystemOS.ActiveContextMenus, MenuFrame)
-
-    -- HOẠT ẢNH FADE IN GỐC CHUẨN OS
-    local twIn = TweenService:Create(MenuFrame, FADE_TWEEN, { GroupTransparency = 0 })
-    twIn:Play()
-
     return MenuFrame
 end
 
 --------------------------------------------------------------------------------
--- 5. GẮN CONTEXTMENU (CHUỘT PHẢI CHUẨN XÁC ĐẦU MŨI CHUỘT)
+-- 5. GẮN CONTEXTMENU (CHUỘT PHẢI CHUẨN ĐẦU MŨI CON TRỎ CHUỘT)
 --------------------------------------------------------------------------------
 local function SetupContextMenuTrigger(guiObject, getItemsCallback)
     local rmbStartPos = nil
@@ -1853,9 +1527,11 @@ local function SetupContextMenuTrigger(guiObject, getItemsCallback)
             local dist = (currentPos - rmbStartPos).Magnitude
             local elapsed = tick() - rmbStartTime
 
+            -- Phân biệt Click vs Xoay camera: Click nhẹ là mở ngay
             if dist < 6 and elapsed < 0.35 then
                 local items = getItemsCallback(guiObject)
                 if items and #items > 0 then
+                    SystemOS.PreventMenuClose = true
                     SystemOS:CloseAllContextMenus()
                     local mPos = GetExactMousePosition()
                     SystemOS:CreateContextMenu(items, mPos.X, mPos.Y, SystemOS.NonUser)
@@ -1864,6 +1540,7 @@ local function SetupContextMenuTrigger(guiObject, getItemsCallback)
         end
     end)
 
+    -- Giữ lì 0.5s trên điện thoại
     guiObject.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Touch then
             local touchStartPos = input.Position
@@ -1882,6 +1559,7 @@ local function SetupContextMenuTrigger(guiObject, getItemsCallback)
                     if moveConn then moveConn:Disconnect() end
                     local items = getItemsCallback(guiObject)
                     if items and #items > 0 then
+                        SystemOS.PreventMenuClose = true
                         SystemOS:CloseAllContextMenus()
                         local touchVec = Vector2.new(touchStartPos.X, touchStartPos.Y)
                         if not SystemOS.ScreenGui.IgnoreGuiInset then
@@ -1933,6 +1611,7 @@ function SystemOS:AddSystemMenu(logoText, menuItems)
     CheckTopBarVisibility()
 
     btn.MouseButton1Click:Connect(function()
+        SystemOS.PreventMenuClose = true
         SystemOS:CloseAllContextMenus()
         local pos = btn.AbsolutePosition
         if not SystemOS.ScreenGui.IgnoreGuiInset then
@@ -1953,6 +1632,7 @@ function SystemOS:AddTopMenu(name, menuItems)
     CheckTopBarVisibility()
 
     btn.MouseButton1Click:Connect(function()
+        SystemOS.PreventMenuClose = true
         SystemOS:CloseAllContextMenus()
         local pos = btn.AbsolutePosition
         if not SystemOS.ScreenGui.IgnoreGuiInset then
@@ -2497,6 +2177,7 @@ function SystemOS:BindWorldContextMenu(builderCallback)
         local camera = workspace.CurrentCamera
         if not camera then return end
 
+        -- ViewportPointToRay dùng toạ độ Viewport gốc không bị lệch
         local mouseLoc = UserInputService:GetMouseLocation()
         local ray = camera:ViewportPointToRay(mouseLoc.X, mouseLoc.Y)
         if not ray then return end
